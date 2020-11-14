@@ -28,7 +28,7 @@ def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 
     :param title: table title, first row."""
     with open(file_name, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(title)  # title
+        writer.writerow(title)
         for row in iterator:
             writer.writerow(row)
 
