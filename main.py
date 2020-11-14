@@ -21,11 +21,16 @@ def get_organisations(region, orientation):
     return map(lambda x: (x['name'], x['full_name'], x['site_url']), result['data']['list'])
 
 
-def save_to_csv(iterator, file_name, delimiter=','):
-    with open(file_name, 'w', newline='') as f:
-    writer = csv.writer(f, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
-    for row in iterator:
-        writer.writerow(row)
+def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 'site_url')):
+    """":param iterator: iterator over organisations.
+    :param file_name: name of file where table will be saved.
+    :param delimiter: delemiter for CSV table.
+    :param title: table title, first row."""
+    with open(file_name, 'w', newline='') as csv_file:
+        writer = csv.writer(csv_file, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(title)  # title
+        for row in iterator:
+            writer.writerow(row)
 
 if __name__ == '__main__':
-    print(*get_organisations(42, 3))
+    save_to_csv(get_organisations(42, 3), 'output.csv')
