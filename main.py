@@ -16,7 +16,7 @@ def get_organisations(region, orientation):
     #    f'http://dop.edu.ru/organization/list?{region}{orientation}&page=1&perPage=1'
     # ).content.decode())['data']['count']
     result = json.loads(get(
-        f'http://dop.edu.ru/organization/list?orientation={region}{orientation}&page=1&perPage={count}'
+        f'http://dop.edu.ru/organization/list{region}{orientation}&page=1&perPage={count}'
     ).content.decode())
     return map(lambda x: (x['name'], x['full_name'], x['site_url']), result['data']['list'])
 
