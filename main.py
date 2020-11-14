@@ -33,4 +33,6 @@ def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 
             writer.writerow(row)
 
 if __name__ == '__main__':
-    save_to_csv(get_organisations(42, 3), 'output.csv')
+    region_code = 42  # Московская область
+    orientation_code = 3  # "Техническая"
+    save_to_csv(get_organisations(region_code, orientation_code), 'output.csv')
