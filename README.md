@@ -9,4 +9,4 @@ pip3 install -r requirements.txt
 ```
 python3 main.py
 ```
-Table of organizations will saved in file 'outup.csv'.
+Table of organizations will be saved in file 'outup.csv'.
