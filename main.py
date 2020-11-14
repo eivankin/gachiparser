@@ -22,8 +22,10 @@ def get_organisations(region, orientation):
 
 
 def save_to_csv(iterator, file_name, delimiter=','):
-    pass
-
+    with open(file_name, 'w', newline='') as f:
+    writer = csv.writer(f, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
+    for row in iterator:
+        writer.writerow(row)
 
 if __name__ == '__main__':
     print(*get_organisations(42, 3))
