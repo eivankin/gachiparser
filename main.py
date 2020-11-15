@@ -8,15 +8,15 @@ def get_organisations(region, orientation):
     :param region: region index in internal API. Can be None.
     :param orientation: orientation index in internal API. Can be None.
     :returns organisations: iterator over organisations, where each element is tuple of name, full name and site url."""
-    region = f'region={region}' if region else ''
-    orientation = f'&orientation={orientation}' if orientation else ''
+    region = f'region={region}&' if region else ''
+    orientation = f'orientation={orientation}&' if orientation else ''
     count = 1000
     # uncomment for count detection
     # count = json.loads(get(
-    #    f'http://dop.edu.ru/organization/list?{region}{orientation}&page=1&perPage=1'
+    #    f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage=1'
     # ).content.decode())['data']['count']
     result = json.loads(get(
-        f'http://dop.edu.ru/organization/list?{region}{orientation}&page=1&perPage={count}'
+        f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage={count}'
     ).content.decode())
     return map(lambda x: (x['name'], x['full_name'], x['site_url']), result['data']['list'])
 
