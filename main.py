@@ -9,6 +9,16 @@ def get_content(tag):
     return tag.content if tag else None
 
 
+def get_type(url):
+    """:param url: url to check.
+    :returns type: type of link, code of social media or None."""
+    return None
+
+
+def get_followers(url, link_type):
+    pass
+
+
 def get_site_info(url):
     """:param url: organization site.
     :returns info: list of fields 'is_site_working', 
@@ -25,7 +35,14 @@ def get_site_info(url):
             description = get_content(page.find('meta', {'name': 'description'}))
             keywords = get_content(page.find('meta', {'name': 'keywords'}))
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
-            # links_list = list(filter(lambda x: x, page.find_all('a')))
+            # links_list, followers_list = {}, {}
+            # for link in page.find_all('a'):
+            #     link_type = get_type(link.href)
+            #     if link_type:
+            #         links_list[link_type] = link.href
+            #         followers_list[link_type] = get_followers(link.href, link_type)
+            # links = json.dumps(links_list)
+            # followers = json.dumps(followers_list)
     return is_working, is_belonging, title, description, keywords, links, followers
 
 
@@ -43,7 +60,7 @@ def get_organisations(region, orientation):
     #    f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage=1'
     # ).content.decode())['data']['count']
     result = json.loads(get(
-        f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage={count}'
+        f'http://dop.edu.ru/organization/list?{region}{orientation}institution_type=188&status=1&page=1&perPage={count}'
     ).content.decode())
     return tqdm(map(
         lambda x: (x['name'], x['full_name'], x['region_id'], x['site_url'], 
