@@ -11,10 +11,6 @@ $ sudo apt install python3 python3-pip
 ```
 $ pip3 install -r requirements.txt
 ```
-or
-```
-$ pip3 install requests
-```
 ## Usage
 ```
 $ python3 main.py
