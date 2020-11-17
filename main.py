@@ -3,11 +3,20 @@ from requests import get
 import csv
 
 
+def get_site_info(url):
+    """:param url: organization site.
+    :returns info: list of fields 'is_site_working', 
+    'is_site_belonging_to_organization', 'site_title', 'site_description', 
+    'site_keywords', 'social_links', 'followers'."""
+    return [None] * 7
+
+
 def get_organisations(region, orientation):
     """This function sending request to dop.edu.ru API.
     :param region: region index in internal API. Can be int, None or str.
     :param orientation: orientation index in internal API. Can be int, None or str.
-    :returns organisations: iterator over organisations, where each element is tuple of name, full name and site url."""
+    :returns organisations: iterator over organisations, 
+    where each element is tuple of name, full name and site url."""
     region = f'region={region}&' if region else ''
     orientation = f'orientation={orientation}&' if orientation else ''
     count = 2000
@@ -18,10 +27,14 @@ def get_organisations(region, orientation):
     result = json.loads(get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage={count}'
     ).content.decode())
-    return map(lambda x: (x['name'], x['full_name'], x['site_url']), result['data']['list'])
+    return map(
+        lambda x: 
+        (x['name'], x['full_name'], x['region_id'], x['site_url'], *get_site_info(x['site_url'])), 
+        result['data']['list']
+    )
 
 
-def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 'site_url')):
+def save_to_csv(iterator, file_name, title, delimiter=','):
     """":param iterator: iterator over organisations.
     :param file_name: name of file where table will be saved.
     :param delimiter: delemiter for CSV table.
@@ -32,6 +45,12 @@ def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 
         for row in iterator:
             writer.writerow(row)
 
+
 if __name__ == '__main__':
     orientation_codes = '3,6'  # "Техническая" and "Естественнонаучная"
-    save_to_csv(get_organisations(None, orientation_codes), 'output.csv')
+    save_to_csv(
+        get_organisations(None, orientation_codes), 'output.csv', 
+        ('name', 'full_name', 'region_id', 'site_url', 'is_site_working', 
+        'is_site_belonging_to_organization', 'site_title', 'site_description', 
+        'site_keywords', 'social_links', 'followers')
+    )
