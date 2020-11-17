@@ -2,7 +2,6 @@ import json
 from requests import get
 import csv
 from bs4 import BeautifulSoup
-from tqdm import tqdm
 import re
 
 
@@ -17,7 +16,7 @@ def repair_encoding(s, default_enc):
                 s = tmp
                 break
         else:
-            raise ValueError(f'fuck you, {s}')
+            raise ValueError(f'Correct encoding is not utf-8, windows-1251 and {default_enc}')
     return s
 
 
@@ -58,7 +57,6 @@ def get_site_info(url):
             keywords = get_content(page.find('meta', {'name': 'keywords'}))
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
             if res.encoding.lower() not in ('utf-8', 'windows-1251'):
-                print(res.encoding)
                 title, description, keywords = map(lambda x: repair_encoding(x, res.encoding), [title, description, keywords])
             links_list, followers_list = {}, {}
             #for link in page.find_all('a'):
@@ -87,11 +85,11 @@ def get_organisations(region, orientation):
     result = get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}institution_type=188&status=1&page=1&perPage={count}'
     ).json()
-    return tqdm(map(
+    return map(
         lambda x: (x['name'], x['full_name'], x['region_id'], x['site_url'], 
                    *get_site_info(x['site_url'])), 
         result['data']['list']
-    ))
+    )
 
 
 def save_to_csv(iterator, file_name, title, delimiter=','):
