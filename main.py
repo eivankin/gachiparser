@@ -2,6 +2,23 @@ import json
 from requests import get
 import csv
 from bs4 import BeautifulSoup
+from tqdm import tqdm
+import re
+
+
+def repair_encoding(s, default_enc):
+    if s:
+        for enc in (default_enc, 'utf-8', 'windows-1251'):
+            try:
+                tmp = s.encode(default_enc).decode(enc)
+            except UnicodeDecodeError:
+                tmp = ''
+            if re.match(r'[а-яА-Я0-9a-zA-Z]+', tmp):
+                s = tmp
+                break
+        else:
+            raise ValueError(f'fuck you, {s}')
+    return s
 
 
 def get_content(tag):
@@ -29,22 +46,28 @@ def get_site_info(url):
     is_working, is_belonging, title, description, keywords, links, followers = [None] * 7
     if url:
         url = url if url.startswith('http') else 'http://' + url
-        res = get(url)
-        is_working = res.status_code == 200 and len(res.content) > 200
+        try:
+            res = get(url)
+        except Exception:
+            res = None
+        is_working = res and res.status_code == 200 and len(res.content) > 200
         if is_working:
             page = BeautifulSoup(res.text, features="html.parser")
             title = page.title.string
             description = get_content(page.find('meta', {'name': 'description'}))
             keywords = get_content(page.find('meta', {'name': 'keywords'}))
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
+            if res.encoding.lower() not in ('utf-8', 'windows-1251'):
+                print(res.encoding)
+                title, description, keywords = map(lambda x: repair_encoding(x, res.encoding), [title, description, keywords])
             links_list, followers_list = {}, {}
-            for link in page.find_all('a'):
-                link_type = get_type(link.href)
-                if link_type:
-                    links_list[link_type] = link.href
-                    followers_list[link_type] = get_followers(link.href, link_type)
-            links = json.dumps(links_list)
-            followers = json.dumps(followers_list)
+            #for link in page.find_all('a'):
+                #link_type = get_type(link.href)
+                #if link_type:
+                    #links_list[link_type] = link.href
+                    #followers_list[link_type] = get_followers(link.href, link_type)
+            #links = json.dumps(links_list)
+            #followers = json.dumps(followers_list)
     return is_working, is_belonging, title, description, keywords, links, followers
 
 
@@ -64,11 +87,11 @@ def get_organisations(region, orientation):
     result = get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}institution_type=188&status=1&page=1&perPage={count}'
     ).json()
-    return map(
+    return tqdm(map(
         lambda x: (x['name'], x['full_name'], x['region_id'], x['site_url'], 
                    *get_site_info(x['site_url'])), 
         result['data']['list']
-    )
+    ))
 
 
 def save_to_csv(iterator, file_name, title, delimiter=','):
@@ -76,7 +99,7 @@ def save_to_csv(iterator, file_name, title, delimiter=','):
     :param file_name: name of file where table will be saved.
     :param delimiter: delemiter for CSV table.
     :param title: table title, first row."""
-    with open(file_name, 'w', newline='') as csv_file:
+    with open(file_name, 'w', newline='', encoding='utf8') as csv_file:
         writer = csv.writer(csv_file, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(title)
         for row in iterator:
