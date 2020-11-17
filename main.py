@@ -5,12 +5,12 @@ import csv
 
 def get_organisations(region, orientation):
     """This function sending request to dop.edu.ru API.
-    :param region: region index in internal API. Can be None.
-    :param orientation: orientation index in internal API. Can be None.
+    :param region: region index in internal API. Can be int, None or str.
+    :param orientation: orientation index in internal API. Can be int, None or str.
     :returns organisations: iterator over organisations, where each element is tuple of name, full name and site url."""
     region = f'region={region}' if region else ''
     orientation = f'&orientation={orientation}' if orientation else ''
-    count = 1000
+    count = 2000
     # uncomment for count detection
     # count = json.loads(get(
     #    f'http://dop.edu.ru/organization/list?{region}{orientation}&page=1&perPage=1'
@@ -33,6 +33,5 @@ def save_to_csv(iterator, file_name, delimiter=',', title=('name', 'full_name', 
             writer.writerow(row)
 
 if __name__ == '__main__':
-    region_code = 42  # Московская область
-    orientation_code = 3  # "Техническая"
-    save_to_csv(get_organisations(region_code, orientation_code), 'output.csv')
+    orientation_codes = '3,6'  # "Техническая" and "Естественнонаучная"
+    save_to_csv(get_organisations(None, orientation_codes), 'output.csv')
