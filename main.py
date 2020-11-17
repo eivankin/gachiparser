@@ -2,6 +2,11 @@ import json
 from requests import get
 import csv
 from bs4 import BeautifulSoup
+from tqdm import tqdm
+
+
+def get_content(tag):
+    return tag.content if tag else None
 
 
 def get_site_info(url):
@@ -11,14 +16,16 @@ def get_site_info(url):
     'site_keywords', 'social_links', 'followers'."""
     is_working, is_belonging, title, description, keywords, links, followers = [None] * 7
     if url:
+        url = url if url.startswith('http') else 'http://' + url
         res = get(url)
-        is_working = res.status_code == 200
+        is_working = res.status_code == 200 and len(res.content) > 200
         if is_working:
-            page = BeautifulSoup(res.content.decode(), features="html.parser")
+            page = BeautifulSoup(res.text, features="html.parser")
             title = page.title.string
-            description = page.find('meta', {'name': 'description'}).content
-            keywords = page.find('meta', {'name': 'keywords'}).content
+            description = get_content(page.find('meta', {'name': 'description'}))
+            keywords = get_content(page.find('meta', {'name': 'keywords'}))
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
+            # links_list = list(filter(lambda x: x, page.find_all('a')))
     return is_working, is_belonging, title, description, keywords, links, followers
 
 
@@ -38,11 +45,11 @@ def get_organisations(region, orientation):
     result = json.loads(get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}page=1&perPage={count}'
     ).content.decode())
-    return map(
+    return tqdm(map(
         lambda x: (x['name'], x['full_name'], x['region_id'], x['site_url'], 
                    *get_site_info(x['site_url'])), 
         result['data']['list']
-    )
+    ))
 
 
 def save_to_csv(iterator, file_name, title, delimiter=','):
