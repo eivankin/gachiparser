@@ -4,6 +4,7 @@ import csv
 from bs4 import BeautifulSoup
 import re
 from tqdm import tqdm
+from urllib.parse import urljoin
 
 
 ENCS = ('utf-8', 'windows-1251', 'windows-1252')
@@ -33,13 +34,32 @@ def repair_encoding(s, default_enc):
                 s = tmp
                 break
         else:
-            print(s.encode())
             raise ValueError(f'Correct encoding is not utf-8, windows-1251, windows-1252 and {default_enc}')
     return s
 
 
 def get_content(tag):
     return tag.content if tag and tag.content else ''
+
+
+def get_links(page, find_contacts=True):
+    links_list, followers_list, contact_link = {}, {}, ''
+    for link in page.find_all('a'):
+        if link.get('href'):
+            h = link.get('href')
+            if find_contacts and ('contacts' in h.lower() or 'контакты' in str(link.string).lower()):
+                contact_link = h
+            link_type = get_type(h)
+            if link_type:
+                match = re.search('(?P<url>https?://[^\s]+)', h)
+                if match:
+                    h = match.group('url')
+                    links_list[link_type] = h
+                    if link_type != 'ig':
+                        followers_list[link_type] = get_followers(h, link_type)
+                else:
+                    print(h)
+    return links_list, followers_list, contact_link
 
 
 def get_type(url):
@@ -64,15 +84,18 @@ def get_followers(url, link_type):
     page = BeautifulSoup(get(url).text, features='html.parser')
     count = ''
     if link_type == 'vk':
-        count = page.find('em', {'class': 'pm_counter'}).string
+        count = page.find('em', {'class': 'pm_counter'})
     elif link_type == 'fb':
-        count = page.find(
-            'div', {'class': '_4-u2 _6590 _3xaf _4-u8'}).find_all(
-                'div', {'class': '_2pi9 _2pi2'})[1].find(
-                    'div', {'class': '_4bl9'}).string
+        try:
+            count = page.find(
+                'div', {'class': '_4-u2 _6590 _3xaf _4-u8'}).find_all(
+                    'div', {'class': '_2pi9 _2pi2'})[1].find(
+                        'div', {'class': '_4bl9'})
+        except (AttributeError, IndexError):
+            print(url, count)
     elif link_type == 'ok':
-        count = page.find('span', {'id': 'groupMembersCntEl'}).string
-    return ''.join(filter(str.isdigit, count))
+        count = page.find('span', {'id': 'groupMembersCntEl'})
+    return ''.join(filter(str.isdigit, count.string)) if count and count.string else None
 
 
 def get_site_info(url):
@@ -99,25 +122,11 @@ def get_site_info(url):
                 title, description, keywords = map(
                 lambda x: repair_encoding(x, res.encoding), [title, description, keywords]
             )
-            links_list, followers_list = {}, {}
-            contact_link = ''
-            for link in page.find_all('a'):
-                if link.get('href'):
-                    if 'contacts' in link.get('href').lower() or 'контакты' in str(link.string).lower():
-                        contact_link = link.get('href')
-                    link_type = get_type(link.get('href'))
-                    if link_type:
-                        links_list[link_type] = link.get('href')
-                        if link_type != 'ig':
-                            followers_list[link_type] = get_followers(link.get('href'), link_type)
+            links_list, followers_list, contact_link = get_links(page)
             if not links_list and contact_link:
-                for link in BeautifulSoup(get(contact_link).text, features='html.parser').find_all('a'):
-                    if link.get('href'):
-                        link_type = get_type(link.get('href'))
-                        if link_type:
-                            links_list[link_type] = link.get('href')
-                            if link_type != 'ig':
-                                followers_list[link_type] = get_followers(link.get('href'), link_type)
+                contact_link = urljoin(url, contact_link)
+                p = BeautifulSoup(get(contact_link).text, features='html.parser')
+                links_list, followers_list, contact_link = get_links(p, False)
             links = json.dumps(links_list)
             followers = json.dumps(followers_list)
     return is_working, is_belonging, title, description, keywords, links, followers
