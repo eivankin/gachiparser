@@ -3,6 +3,7 @@ from requests import get
 import csv
 from bs4 import BeautifulSoup
 import re
+from tqdm import tqdm
 
 
 def repair_encoding(s, default_enc):
@@ -15,16 +16,22 @@ def repair_encoding(s, default_enc):
                 tmp = s.encode(default_enc).decode(enc)
             except UnicodeDecodeError:
                 tmp = ''
+            except UnicodeEncodeError:
+                try:
+                    tmp = s.encode(enc).decode(enc)
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    pass
             if re.match(r'[а-яА-Я0-9a-zA-Z]+', tmp):
                 s = tmp
                 break
         else:
+            print(s.encode())
             raise ValueError(f'Correct encoding is not utf-8, windows-1251 and {default_enc}')
     return s
 
 
 def get_content(tag):
-    return tag.content if tag else None
+    return tag.content if tag and tag.content else ''
 
 
 def get_type(url):
@@ -72,13 +79,13 @@ def get_site_info(url):
             res = get(url)
         except Exception:
             res = None
-        is_working = (res and res.status_code == 200 and len(res.content) > 200 and 
+        is_working = (bool(res) and res.status_code == 200 and len(res.content) > 200 and 
                       'страница не найдена' not in res.text.lower())
         if is_working:
             page = BeautifulSoup(res.text, features='html.parser')
-            title = page.title.string
-            description = get_content(page.find('meta', {'name': 'description'}))
-            keywords = get_content(page.find('meta', {'name': 'keywords'}))
+            title = page.title.string.strip() if page.title.string else None
+            description = get_content(page.find('meta', {'name': 'description'})).strip()
+            keywords = get_content(page.find('meta', {'name': 'keywords'})).strip()
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
             if res.encoding.lower() not in ('utf-8', 'windows-1251'):
                 title, description, keywords = map(
@@ -124,14 +131,14 @@ def get_organisations(region, orientation):
     result = get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}institution_type=188&status=1&page=1&perPage={count}'
     ).json()
-    return map(
+    return tqdm(map(
         lambda x: (x['name'], x['full_name'], x['inn'], 
                    x['ogrn'], x['origin_address'],
                    x['phone'], x['email'],
                    x['region_id'], x['site_url'], 
                    *get_site_info(x['site_url'])), 
         result['data']['list']
-    )
+    ), total=int(result['data']['count']))
 
 
 def save_to_csv(iterator, file_name, title, delimiter=','):
