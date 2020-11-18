@@ -18,7 +18,7 @@ def repair_encoding(s, default_enc):
         for enc in ENCS:
             try:
                 tmp = s.encode(default_enc).decode(enc)
-            except UnicodeDecodeError:
+            except (UnicodeDecodeError, LookupError):
                 tmp = ''
             except UnicodeEncodeError:
                 for enc_2 in ENCS:
@@ -79,7 +79,10 @@ def get_followers(url, link_type):
     :param link_type: code of social media.
     :returns followers_count"""
     url = url.replace('/vk.com', '/m.vk.com')
-    page = BeautifulSoup(get(url).text, features='html.parser')
+    try:
+        page = BeautifulSoup(get(url).text, features='html.parser')
+    except Exception:
+        return None
     count = ''
     if link_type == 'vk':
         count = page.find('em', {'class': 'pm_counter'})
