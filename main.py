@@ -6,27 +6,35 @@ import re
 from tqdm import tqdm
 
 
+ENCS = ('utf-8', 'windows-1251', 'windows-1252')
+
+
 def repair_encoding(s, default_enc):
     """:param s: string with unknow encoding.
     :param default_enc: auto-detected encoding.
     :returns new_s: string in with correct encoding."""
     if s and not re.match(r'[а-яА-Я0-9a-zA-Z]+', s):
-        for enc in ('utf-8', 'windows-1251'):
+        for enc in ENCS:
             try:
                 tmp = s.encode(default_enc).decode(enc)
             except UnicodeDecodeError:
                 tmp = ''
             except UnicodeEncodeError:
-                try:
-                    tmp = s.encode(enc).decode(enc)
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    pass
-            if re.match(r'[а-яА-Я0-9a-zA-Z]+', tmp):
+                for enc_2 in ENCS:
+                    try:
+                        tmp = s.encode().decode().encode(enc_2).decode(enc)
+                        break
+                    except (UnicodeEncodeError, UnicodeDecodeError):
+                        pass
+                else:
+                    tmp = ''
+            match = re.match(r'[а-яА-Я0-9a-zA-Z \"]+', tmp)
+            if match and len(match.group(0)) > 3:
                 s = tmp
                 break
         else:
             print(s.encode())
-            raise ValueError(f'Correct encoding is not utf-8, windows-1251 and {default_enc}')
+            raise ValueError(f'Correct encoding is not utf-8, windows-1251, windows-1252 and {default_enc}')
     return s
 
 
@@ -56,7 +64,7 @@ def get_followers(url, link_type):
     page = BeautifulSoup(get(url).text, features='html.parser')
     count = ''
     if link_type == 'vk':
-        count = page.find('em', {'class': 'pm_counter'})
+        count = page.find('em', {'class': 'pm_counter'}).string
     elif link_type == 'fb':
         count = page.find(
             'div', {'class': '_4-u2 _6590 _3xaf _4-u8'}).find_all(
@@ -83,7 +91,7 @@ def get_site_info(url):
                       'страница не найдена' not in res.text.lower())
         if is_working:
             page = BeautifulSoup(res.text, features='html.parser')
-            title = page.title.string.strip() if page.title.string else None
+            title = page.title.string.strip() if page.title and page.title.string else None
             description = get_content(page.find('meta', {'name': 'description'})).strip()
             keywords = get_content(page.find('meta', {'name': 'keywords'})).strip()
             is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
@@ -94,22 +102,22 @@ def get_site_info(url):
             links_list, followers_list = {}, {}
             contact_link = ''
             for link in page.find_all('a'):
-                if link.href:
-                    if 'contacts' in link.href.lower() or 'контакты' in str(link.string).lower():
-                        contact_link = link.href
-                    link_type = get_type(link.href)
+                if link.get('href'):
+                    if 'contacts' in link.get('href').lower() or 'контакты' in str(link.string).lower():
+                        contact_link = link.get('href')
+                    link_type = get_type(link.get('href'))
                     if link_type:
-                        links_list[link_type] = link.href
+                        links_list[link_type] = link.get('href')
                         if link_type != 'ig':
-                            followers_list[link_type] = get_followers(link.href, link_type)
+                            followers_list[link_type] = get_followers(link.get('href'), link_type)
             if not links_list and contact_link:
                 for link in BeautifulSoup(get(contact_link).text, features='html.parser').find_all('a'):
-                    if link.href:
-                        link_type = get_type(link.href)
+                    if link.get('href'):
+                        link_type = get_type(link.get('href'))
                         if link_type:
-                            links_list[link_type] = link.href
+                            links_list[link_type] = link.get('href')
                             if link_type != 'ig':
-                                followers_list[link_type] = get_followers(link.href, link_type)
+                                followers_list[link_type] = get_followers(link.get('href'), link_type)
             links = json.dumps(links_list)
             followers = json.dumps(followers_list)
     return is_working, is_belonging, title, description, keywords, links, followers
