@@ -57,8 +57,6 @@ def get_links(page, find_contacts=True):
                     links_list[link_type] = h
                     if link_type != 'ig':
                         followers_list[link_type] = get_followers(h, link_type)
-                else:
-                    print(h)
     return links_list, followers_list, contact_link
 
 
@@ -92,7 +90,7 @@ def get_followers(url, link_type):
                     'div', {'class': '_2pi9 _2pi2'})[1].find(
                         'div', {'class': '_4bl9'})
         except (AttributeError, IndexError):
-            print(url, count)
+            pass
     elif link_type == 'ok':
         count = page.find('span', {'id': 'groupMembersCntEl'})
     return ''.join(filter(str.isdigit, count.string)) if count and count.string else None
