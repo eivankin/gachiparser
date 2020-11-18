@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import re
 from tqdm import tqdm
 from urllib.parse import urljoin
+import aiohttp
+import asyncio
 
 
 ENCS = ('utf-8', 'windows-1251', 'windows-1252')
@@ -56,7 +58,7 @@ def get_links(page, find_contacts=True):
                     h = match.group('url')
                     links_list[link_type] = h
                     if link_type != 'ig':
-                        followers_list[link_type] = get_followers(h, link_type)
+                        followers_list[link_type] = loop.run_until_complete(get_followers(h, link_type))
     return links_list, followers_list, contact_link
 
 
@@ -74,29 +76,32 @@ def get_type(url):
     return None
 
 
-def get_followers(url, link_type):
+async def get_followers(url, link_type):
     """:param url: link to social media.
     :param link_type: code of social media.
     :returns followers_count"""
+    
     url = url.replace('/vk.com', '/m.vk.com')
-    page = BeautifulSoup(get(url).text, features='html.parser')
-    count = ''
-    if link_type == 'vk':
-        count = page.find('em', {'class': 'pm_counter'})
-    elif link_type == 'fb':
-        try:
-            count = page.find(
-                'div', {'class': '_4-u2 _6590 _3xaf _4-u8'}).find_all(
-                    'div', {'class': '_2pi9 _2pi2'})[1].find(
-                        'div', {'class': '_4bl9'})
-        except (AttributeError, IndexError):
-            pass
-    elif link_type == 'ok':
-        count = page.find('span', {'id': 'groupMembersCntEl'})
-    return ''.join(filter(str.isdigit, count.string)) if count and count.string else None
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as res:
+            page = BeautifulSoup(await res.text(), features='html.parser')
+            count = ''
+            if link_type == 'vk':
+                count = page.find('em', {'class': 'pm_counter'})
+            elif link_type == 'fb':
+                try:
+                    count = page.find(
+                        'div', {'class': '_4-u2 _6590 _3xaf _4-u8'}).find_all(
+                            'div', {'class': '_2pi9 _2pi2'})[1].find(
+                                'div', {'class': '_4bl9'})
+                except (AttributeError, IndexError):
+                    pass
+            elif link_type == 'ok':
+                count = page.find('span', {'id': 'groupMembersCntEl'})
+            return ''.join(filter(str.isdigit, count.string)) if count and count.string else None
 
 
-def get_site_info(url):
+async def get_site_info(url):
     """:param url: organization site.
     :returns info: list of fields 'is_site_working', 
     'is_site_belonging_to_organization', 'site_title', 'site_description', 
@@ -104,30 +109,30 @@ def get_site_info(url):
     is_working, is_belonging, title, description, keywords, links, followers = [None] * 7
     if url:
         url = url if url.startswith('http') else 'http://' + url
-        try:
-            res = get(url)
-        except Exception:
-            res = None
-        is_working = (bool(res) and res.status_code == 200 and len(res.content) > 200 and 
-                      'страница не найдена' not in res.text.lower())
-        if is_working:
-            page = BeautifulSoup(res.text, features='html.parser')
-            title = page.title.string.strip() if page.title and page.title.string else None
-            description = get_content(page.find('meta', {'name': 'description'})).strip()
-            keywords = get_content(page.find('meta', {'name': 'keywords'})).strip()
-            is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
-            if res.encoding.lower() not in ('utf-8', 'windows-1251'):
-                title, description, keywords = map(
-                lambda x: repair_encoding(x, res.encoding), [title, description, keywords]
-            )
-            links_list, followers_list, contact_link = get_links(page)
-            if not links_list and contact_link:
-                contact_link = urljoin(url, contact_link)
-                p = BeautifulSoup(get(contact_link).text, features='html.parser')
-                links_list, followers_list, contact_link = get_links(p, False)
-            links = json.dumps(links_list)
-            followers = json.dumps(followers_list)
-    return is_working, is_belonging, title, description, keywords, links, followers
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                text = await res.text()
+                is_working = (bool(res) and res.status == 200 and len(text) > 200 and 
+                              'страница не найдена' not in text.lower())
+                if is_working:
+                    page = BeautifulSoup(await res.text(), features='html.parser')
+                    title = page.title.string.strip() if page.title and page.title.string else None
+                    description = get_content(page.find('meta', {'name': 'description'})).strip()
+                    keywords = get_content(page.find('meta', {'name': 'keywords'})).strip()
+                    is_belonging = len(url.replace('http://', '').replace('https://', '').split('/')) < 4
+                    # if res.encoding.lower() not in ('utf-8', 'windows-1251'):
+                    #    title, description, keywords = map(
+                    #    lambda x: repair_encoding(x, res.encoding), [title, description, keywords]
+                    # )
+                    links_list, followers_list, contact_link = {}, {}, ''  # get_links(page)
+                    # if not links_list and contact_link:
+                    #    contact_link = urljoin(url, contact_link)
+                    #    async with session.get(contact_link) as res_2:
+                    #        p = BeautifulSoup(await res_2.text(), features='html.parser')
+                    #        links_list, followers_list, contact_link = get_links(p, False)
+                    links = json.dumps(links_list)
+                    followers = json.dumps(followers_list)
+            return is_working, is_belonging, title, description, keywords, links, followers
 
 
 def get_organisations(region, orientation):
@@ -146,13 +151,16 @@ def get_organisations(region, orientation):
     result = get(
         f'http://dop.edu.ru/organization/list?{region}{orientation}institution_type=188&status=1&page=1&perPage={count}'
     ).json()
+    print('List of organizations downloaded')
+    done, pending = loop.run_until_complete(asyncio.wait([asyncio.ensure_future(get_site_info(x['site_url'])) 
+                                                          for x in result['data']['list']]))
     return tqdm(map(
-        lambda x: (x['name'], x['full_name'], x['inn'], 
-                   x['ogrn'], x['origin_address'],
-                   x['phone'], x['email'],
-                   x['region_id'], x['site_url'], 
-                   *get_site_info(x['site_url'])), 
-        result['data']['list']
+        lambda x: (x[0]['name'], x[0]['full_name'], x[0]['inn'], 
+                   x[0]['ogrn'], x[0]['origin_address'],
+                   x[0]['phone'], x[0]['email'],
+                   x[0]['region_id'], x[0]['site_url'], 
+                   *x[1].result()), 
+        zip(result['data']['list'], done)
     ), total=int(result['data']['count']))
 
 
@@ -169,6 +177,7 @@ def save_to_csv(iterator, file_name, title, delimiter=','):
 
 
 if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
     orientation_codes = '3,6'  # "Техническая" and "Естественнонаучная"
     save_to_csv(
         get_organisations(None, orientation_codes), 'output.csv', 
