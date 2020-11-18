@@ -34,7 +34,7 @@ def repair_encoding(s, default_enc):
                 s = tmp
                 break
         else:
-            raise ValueError(f'Correct encoding is not utf-8, windows-1251, windows-1252 and {default_enc}')
+            return ''
     return s
 
 
