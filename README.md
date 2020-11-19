@@ -15,4 +15,4 @@ $ pip3 install -r requirements.txt
 ```
 $ python3 main.py
 ```
-Table of organizations will be saved in file 'output.csv'.
+Table of organizations will be saved in file 'result.csv'.
