@@ -2,7 +2,7 @@ from time import time
 import json
 import asyncio
 import aiohttp
-from bs4 import BeautifulSoup
+import bs4
 from requests import get
 import re
 import csv
@@ -13,14 +13,17 @@ count = 0
 ENCS = ('utf-8', 'windows-1251', 'windows-1252')
 MAX_RETRIES = 10
 
-def finish_checking(item):
+def finish_checking(item: dict) -> None:
+    """:param item: dictionary with organisation info, will be row of table."""
     global count
     result.append(item)
     count += 1
     print(f'Total parsed: {count:03d}/{len(orgs)}', end='\r')
 
 
-def repair_url(url):
+def repair_url(url: str) -> list:
+    """:param url: url to repair.
+    :returns possible_urls: list of possible urls, can be empty."""
     possible_urls = []
     url = url.replace('http//', 'http://')
     if url:
@@ -35,7 +38,8 @@ def repair_url(url):
     return possible_urls
 
 
-async def get_one(org, session):
+async def get_one(org: dict, session: aiohttp.ClientSession) -> None:
+    """:param org: organization dictionary from JSON response of dop.edu.ru."""
     item = {col: org[col] for col in ('name', 'full_name', 'inn', 'ogrn', 'origin_address', 
                                       'phone', 'email', 'region_id', 'site_url')}
     site_url = org['site_url']
@@ -60,7 +64,7 @@ async def get_one(org, session):
                               'страница не найдена' not in page_content.lower())
                 item['is_site_working'] = is_working
                 for key, value in zip(('site_title', 'site_description', 'site_keywords', 'social_links'), 
-                                      get_item(page_content, url, is_working)):
+                                      get_item(page_content, is_working)):
                     item[key] = value
                 item['is_site_belonging_to_organization'] = (item['is_site_working'] and 
                                                         len(url.replace('http://', '').replace('https://', '').split('/')) < 4)
@@ -71,7 +75,7 @@ async def get_one(org, session):
     finish_checking(item)
 
 
-async def bound_fetch(sm, org, session):
+async def bound_fetch(sm: asyncio.Semaphore, org: dict, session: aiohttp.ClientSession) -> None:
     for _ in range(MAX_RETRIES):
         try:
             async with sm:
@@ -80,10 +84,10 @@ async def bound_fetch(sm, org, session):
         except aiohttp.client_exceptions.ClientOSError:
             continue
     else:
-        print(f'Cannot connect to {org["url"]}: out of retries. Skipping...')
+        print(f'Cannot connect to {org["site_url"]}: out of retries. Skipping...')
 
 
-async def run(orgs):
+async def run(orgs: list) -> None:
     tasks = []
     sm = asyncio.Semaphore(50)
     async with aiohttp.ClientSession() as session:
@@ -94,14 +98,19 @@ async def run(orgs):
         await asyncio.gather(*tasks)
 
 
-def get_content(tag):
+def get_content(tag: bs4.element.Tag) -> str:
+    """:param tag: parsed tag object.
+    :returns string: tag string if tag exists, else empty string."""
     return tag.content if tag and tag.content else ''
 
 
-def get_item(page_content, url, is_working):
+def get_item(page_content: str, is_working: bool) -> tuple:
+    """:param page_content: page text for parsing.
+    :param is_working: is site working.
+    :returns title, description, keywords, links: Returns None if this parameter equals to False."""
     title, description, keywords, links = [None] * 4
     if is_working:
-        page = BeautifulSoup(page_content, 'html.parser')
+        page = bs4.BeautifulSoup(page_content, 'html.parser')
         title = page.title.string.strip() if page.title and page.title.string else None
         description = get_content(page.find('meta', {'name': 'description'})).strip()
         keywords = get_content(page.find('meta', {'name': 'keywords'})).strip()
@@ -129,21 +138,21 @@ def get_item(page_content, url, is_working):
     return title, description, keywords, links
 
 
-def save_to_csv(iterator, file_name, title, delimiter=','):
-    """":param iterator: iterator over organisations.
+def save_to_csv(rows: list, file_name: str, title, delimiter=',') -> None:
+    """":param rows: iterator over organisations.
     :param file_name: name of file where table will be saved.
     :param delimiter: delemiter for CSV table.
     :param title: table title, first row."""
     with open(file_name, 'w', newline='', encoding='utf8') as csv_file:
         writer = csv.DictWriter(csv_file, title, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
         writer.writeheader()
-        for row in iterator:
+        for row in rows:
             writer.writerow(row)
 
 
 if __name__ == '__main__':
     start_time = time()
-    orientation = 'orientation=3,6&'
+    orientation = 'orientation=3,6&'  # "Техническая" и "Естественнонаучная"
     print('Loading organizations list...')
     orgs = get(
         f'http://dop.edu.ru/organization/list?{orientation}institution_type=188&status=1&page=1&perPage=2000'
