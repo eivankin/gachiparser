@@ -118,6 +118,8 @@ def get_item(page_content, url, is_working):
                     link_type = 'ok'
                 elif 'instagram.com' in h:
                     link_type = 'ig'
+                elif 'twitter.com' in h:
+                    link_type = 'tw'
                 if link_type:
                     match = re.search('(?P<url>https?://[^\s]+)', h)
                     if match:
