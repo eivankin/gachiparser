@@ -20,37 +20,54 @@ def finish_checking(item):
     print(f'Total parsed: {count:03d}/{len(orgs)}', end='\r')
 
 
+def repair_url(url):
+    possible_urls = []
+    url = url.replace('http//', 'http://')
+    if url:
+        if len(url.split('.')) < 2:
+            url += '.ucoz.ru'
+        match = re.search('(?P<url>https?://[^\s]+)', url)
+        if match:
+            g = match.group('url')
+            possible_urls += [g, g.replace('https', 'http') if g.startswith('https') else g.replace('http', 'https')]
+        else:
+            possible_urls += ['http://' + url, 'https://' + url]
+    return possible_urls
+
+
 async def get_one(org, session):
     item = {col: org[col] for col in ('name', 'full_name', 'inn', 'ogrn', 'origin_address', 
                                       'phone', 'email', 'region_id', 'site_url')}
-    url = org['site_url']
+    site_url = org['site_url']
     del org
-    try:
-        async with session.get(url) as response:
-            page_content = await response.read()
-            default_enc = response.headers.get('Content-Type', '').split('=')
-            default_enc = default_enc[1] if len(default_enc) > 1 else ''
-            for enc in ENCS + (default_enc, ):
-                try:
-                    page_content = page_content.decode(enc)
-                    break
-                except (UnicodeDecodeError, LookupError):
-                    continue
-            else:
-                item['is_site_working'] = response.status == 200 and len(page_content) > 300
-                finish_checking(item)
-                return
-            is_working = (bool(response) and response.status == 200 and len(page_content) > 200 and 
-                          'страница не найдена' not in page_content.lower())
-            item['is_site_working'] = is_working
-            for key, value in zip(('site_title', 'site_description', 'site_keywords', 'social_links'), 
-                                  get_item(page_content, url, is_working)):
-                item[key] = value
-            item['is_site_belonging_to_organization'] = (item['is_site_working'] and 
-                                                    len(url.replace('http://', '').replace('https://', '').split('/')) < 4)
-    except (aiohttp.client_exceptions.ClientConnectorError, aiohttp.client_exceptions.ServerDisconnectedError, 
-            aiohttp.client_exceptions.InvalidURL, aiohttp.client_exceptions.ClientPayloadError, asyncio.TimeoutError):
-        item['is_site_working'] = False
+    for url in repair_url(site_url):
+        try:
+            async with session.get(url) as response:
+                page_content = await response.read()
+                default_enc = response.headers.get('Content-Type', '').split('=')
+                default_enc = default_enc[1] if len(default_enc) > 1 else ''
+                for enc in ENCS + (default_enc, ):
+                    try:
+                        page_content = page_content.decode(enc)
+                        break
+                    except (UnicodeDecodeError, LookupError):
+                        continue
+                else:
+                    item['is_site_working'] = response.status == 200 and len(page_content) > 300
+                    finish_checking(item)
+                    return
+                is_working = (bool(response) and response.status == 200 and len(page_content) > 200 and 
+                              'страница не найдена' not in page_content.lower())
+                item['is_site_working'] = is_working
+                for key, value in zip(('site_title', 'site_description', 'site_keywords', 'social_links'), 
+                                      get_item(page_content, url, is_working)):
+                    item[key] = value
+                item['is_site_belonging_to_organization'] = (item['is_site_working'] and 
+                                                        len(url.replace('http://', '').replace('https://', '').split('/')) < 4)
+                break
+        except (aiohttp.client_exceptions.ClientConnectorError, aiohttp.client_exceptions.ServerDisconnectedError, 
+                aiohttp.client_exceptions.InvalidURL, aiohttp.client_exceptions.ClientPayloadError, asyncio.TimeoutError):
+            item['is_site_working'] = False
     finish_checking(item)
 
 
@@ -72,7 +89,6 @@ async def run(orgs):
     async with aiohttp.ClientSession() as session:
         for org in orgs:
             url = org['site_url']
-            org['site_url'] = url if not url or url.startswith('http') else 'http://' + url
             task = asyncio.ensure_future(bound_fetch(sm, org, session))
             tasks.append(task)
         await asyncio.gather(*tasks)
@@ -94,11 +110,11 @@ def get_item(page_content, url, is_working):
             if link.get('href'):
                 h = link.get('href')
                 link_type = None
-                if 'vk.com' in h:
+                if 'vk.com' in h and all(x not in h for x in ('away', 'album', 'feed', 'videos', 'photo', 'wall')):
                     link_type = 'vk'
                 elif 'facebook.com' in h:
                     link_type = 'fb'
-                elif 'ok.ru' in h:
+                elif '/ok.ru' in h or h.startswith('ok.ru'):
                     link_type = 'ok'
                 elif 'instagram.com' in h:
                     link_type = 'ig'
@@ -140,5 +156,5 @@ if __name__ == '__main__':
          'site_title', 'site_description', 'site_keywords', 'social_links')
     )
     elapsed_time = int(time() - start_time)
-    print(f'Elapsed time: {elapsed_time // 3600:02d}:{elapsed_time % 3600 // 60:02d}:{elapsed_time % 60:02d}')
+    print(f'Elapsed time: {elapsed_time // 3600}:{elapsed_time % 3600 // 60:02d}:{elapsed_time % 60:02d}')
     print('Results saved to result.csv')
